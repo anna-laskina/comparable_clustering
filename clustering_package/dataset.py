@@ -30,7 +30,7 @@ class DKMDataset(Dataset):
         else:
             print('Unknown dataset!')
 
-        self.set_embedding_representation(emb_kwargs)
+        self.set_embedding_representation({} if emb_kwargs is None else emb_kwargs)
 
         self.get_item = {
             'wt': self.get_item_with_target,

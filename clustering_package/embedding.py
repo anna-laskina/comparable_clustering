@@ -12,8 +12,8 @@ from clustering_package.util_files import utils
 
 class STEmbedding():
     def __init__(self, st_name, save_path=None, load_model=False):
-        self.st_model_name = EMBEDDING_MODEL_INFO[st_name]
-        self.normalize = EMBEDDING_MODEL_INFO[st_name]
+        self.st_model_name = EMBEDDING_MODEL_INFO[st_name]['st_model_name']
+        self.normalize = EMBEDDING_MODEL_INFO[st_name]['normalize']
         if save_path is None:
             self.save_path = f'output/emb/{st_name}'
         else:
@@ -83,8 +83,8 @@ class STEmbedding():
 
 class STEmbeddingLang():
     def __init__(self, st_name, save_path=None, load_model=False):
-        self.st_model_name = EMBEDDING_MODEL_INFO[st_name]
-        self.normalize = EMBEDDING_MODEL_INFO[st_name]
+        self.st_model_name = EMBEDDING_MODEL_INFO[st_name]['st_model_name']
+        self.normalize = EMBEDDING_MODEL_INFO[st_name]['normalize']
         if save_path is None:
             self.save_path = f'output/emb/{st_name}'
         else:
@@ -139,6 +139,7 @@ class STEmbeddingLang():
         return dataset_id, dataset_embedding
 
     def save_embedding(self, dataset_name, document_embeddings, document_ids, language):
+        utils.path_check(path=os.path.join(self.save_path, f'dataset_{dataset_name}/'), if_create=True)
         utils.save_data(document_embeddings.detach().numpy(), os.path.join(self.save_path,
                                             f'dataset_{dataset_name}/embedding_{language}.npy'))
         utils.save_data(document_ids, os.path.join(self.save_path,
