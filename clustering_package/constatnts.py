@@ -1,6 +1,7 @@
 SAVE_ROOT_PATH = 'output'
-SAVE_PATH_VER = 'output/models/'
-
+SAVE_PATH_VER = 'output/models'
+EMB_PATH = 'output/emb'
+SEED_VALS = [8905, 9129, 291, 4012, 1256, 6819, 4678, 6971, 1362, 575]
 
 EMBEDDING_MODEL_INFO = {
     'st_pmL': {
@@ -17,7 +18,14 @@ EMBEDDING_MODEL_INFO = {
     },
 }
 
-DEF_KM_PARAM = {
+MODEL_PARAMS = {
+    'AE': {
+        'batch_size': 256, 'shuffle': True,
+        'one_encoder': False, 'dist_metric': 'sum_of_squares',
+        'hidden_1_size': 500, 'hidden_2_size': 500, 'hidden_3_size': 2000,
+        'n_epochs': 300, 'lr': 1e-4, 'lr_s': 1.0, 'scheduler_alg': 'without',
+        'early_stop': False, 'delta': None, 'tolerance': None, 'embedding_dim': 'x10', 'source': 'emb_stpm',
+    },
     'sklearn': {
         'abv': 'S',
         'lr': None, 'n_init': 1,
@@ -66,13 +74,6 @@ DEF_KM_PARAM = {
         'early_stop': True, 'delta': 0.01, 'tolerance': 100,
         'batch_size': 256, 'shuffle': True,
     },
-    'AE': {
-        'batch_size': 256, 'shuffle': True,
-        'one_encoder': False, 'dist_metric': 'sum_of_squares',
-        'hidden_1_size': 500, 'hidden_2_size': 500, 'hidden_3_size': 2000,
-        'n_epochs': 100, 'lr': 1e-4, 'lr_s': 1.0, 'scheduler_alg': 'without',
-        'early_stop': True, 'delta': 0.01, 'tolerance': 100, 'embedding_dim': 'x10', 'source': 'emb_stpm',
-    },
     'dak': {
         'abv': 'DA',
         'lambda_': 1,
@@ -113,7 +114,7 @@ DEF_KM_PARAM = {
 DEF_ARG = {
     'dataset': {
         'language_1': 'en', 'language_2': 'fr', 'get_type': 'wot', 'embedding_type': 'emb_stpm',
-        'dataset_path': 'source/wikipedia/', 'embedding_path': 'output/emb/AE/',
+        'dataset_path': 'source/wikipedia/', 'embedding_path': 'output/emb/',
     },
     'verbose': {
         'verbose_level': 0, 'print_val': 1, 'save_verbose': True, 'save_val': 1, 'balance': 1,

@@ -7,7 +7,7 @@ from tqdm import tqdm
 from nltk.tokenize import sent_tokenize
 from transformers import AutoTokenizer, AutoModel
 
-from clustering_package.constatnts import EMBEDDING_MODEL_INFO
+from clustering_package.constatnts import EMBEDDING_MODEL_INFO, EMB_PATH
 from clustering_package.util_files import utils
 
 class STEmbedding():
@@ -15,9 +15,9 @@ class STEmbedding():
         self.st_model_name = EMBEDDING_MODEL_INFO[st_name]['st_model_name']
         self.normalize = EMBEDDING_MODEL_INFO[st_name]['normalize']
         if save_path is None:
-            self.save_path = f'output/emb/{st_name}'
+            self.save_path = os.path.join(EMB_PATH, st_name)
         else:
-            self.save_path = save_path
+            self.save_path = os.path.join(save_path, st_name)
         self.tokenizer = None
         self.model = None
 
@@ -86,9 +86,9 @@ class STEmbeddingLang():
         self.st_model_name = EMBEDDING_MODEL_INFO[st_name]['st_model_name']
         self.normalize = EMBEDDING_MODEL_INFO[st_name]['normalize']
         if save_path is None:
-            self.save_path = f'output/emb/{st_name}'
+            self.save_path = os.path.join(EMB_PATH, st_name)
         else:
-            self.save_path = save_path
+            self.save_path = os.path.join(save_path, st_name)
         self.tokenizer = None
         self.model = None
 
@@ -141,9 +141,11 @@ class STEmbeddingLang():
     def save_embedding(self, dataset_name, document_embeddings, document_ids, language):
         utils.path_check(path=os.path.join(self.save_path, f'dataset_{dataset_name}/'), if_create=True)
         utils.save_data(document_embeddings.detach().numpy(), os.path.join(self.save_path,
-                                            f'dataset_{dataset_name}/embedding_{language}.npy'))
+                                                                f'dataset_{dataset_name}/embedding_{language}.npy'),
+                        data_type='np')
         utils.save_data(document_ids, os.path.join(self.save_path,
                                             f'dataset_{dataset_name}/id_{language}.json'))
+
 
     def compute(self, dataset_name, dataset_source):
         n = (len(dataset_source['id_order'][dataset_source['language_1']]) + len(dataset_source['id_order'][dataset_source['language_2']]))
@@ -160,7 +162,8 @@ class STEmbeddingLang():
                                     document_ids=doc_ids, language=language)
                 doc_embs = doc_embs.detach().numpy()
             for doc_id, doc_emb in zip(doc_ids, doc_embs):
-                dataset_embedding[dataset_source['id_order'][language][doc_id]] = doc_emb.tolist()
+                if doc_id in dataset_source['id_order'][language]:
+                    dataset_embedding[dataset_source['id_order'][language][doc_id]] = doc_emb.tolist()
         return np.array(dataset_embedding)
 
 
@@ -168,9 +171,9 @@ class AEEmbedding():
     def __init__(self, version, save_path=None,):
         self.version = version
         if save_path is None:
-            self.save_path = f'output/emb/AE/'
+            self.save_path = os.path.join(EMB_PATH, 'AE')
         else:
-            self.save_path = save_path
+            self.save_path = os.path.join(save_path, 'AE')
         self.model = None
 
     def load_embedding(self, dataset_name, seed):
@@ -187,10 +190,16 @@ class AEEmbedding():
     def run_ae(self, dataset_name, seed, **kwargs):
         from clustering_package import run
         _, pre_ae_arg = run.run_util.version_verification(alg='AE', alg_info=None, input_version=self.version,
-                                                          mode_='read', last_print=True, verbose_level=10)
+                                                          mode_='read', last_print=True,
+                                                          verbose_level=kwargs.get('verbose_level', 1))
+        if pre_ae_arg is None:
+            pre_ae_arg = run.run_util.generate_version_info(alg='AE', **kwargs)
+            ae_ver, pre_ae_arg = run.run_util.version_verification('AE', alg_info=pre_ae_arg, input_version=self.version,
+                                                           mode_='create', verbose_level=kwargs.get('verbose_level', 1))
+            self.version = ae_ver
         kwargs.update(pre_ae_arg)
-        kwargs.update({'embedding_type': pre_ae_arg['source'],
-                       'embedding_path': f'{kwargs["embedding_path"][:-4]}/{pre_ae_arg["source"]}/',})
+        kwargs.update({'embedding_type': pre_ae_arg['source'], 'ae_ver': self.version, 'ver_mode': 'read',
+                       'embedding_path': os.path.join(self.save_path, '../'),})
         run.run_autoencoder(f'WIKI_{dataset_name}', seed, **kwargs)
 
     def compute(self, dataset_name, seed, **kwargs):

@@ -64,7 +64,7 @@ def set_lr_scheduler(optimizer, scheduler_alg='without', lr_scheduler=1.0,
 
 
 def version_verification(alg, alg_info=None, input_version=None, mode_='def', last_print=True, verbose_level=0):
-    if alg in constatnts.DEF_KM_PARAM.keys():
+    if alg in constatnts.MODEL_PARAMS.keys():
         save_path = f'{constatnts.SAVE_PATH_VER}/{alg}/ver_info/'
         alg_name = alg
     elif alg in constatnts.DEF_ARG.keys():
@@ -76,6 +76,7 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
 
     utils.path_check(save_path)
     work_version = input_version
+    no_any_last_print = False
     if mode_ == 'create':
         if alg_info is None:
             utils.verbose_print('Please Determine alg_info parameter or choose anther mode_.', verbose_level, 0)
@@ -98,7 +99,20 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
         if input_version is None:
             utils.verbose_print('Please determine input_version parameter or choose anther mode_.', verbose_level, 0)
             exit()
-        alg_info = utils.read_data(os.path.join(save_path, f'info_ver{input_version}.json'))
+        try:
+            alg_info = utils.read_data(os.path.join(save_path, f'info_ver{input_version}.json'))
+            no_any_last_print = True
+        except FileNotFoundError:
+            utils.verbose_print(f'The {alg_name} version does not exist!', verbose_level, 0, print_end=' ')
+            alg_info = None
+    elif mode_ == 'save':
+        if alg_info is None or input_version is None:
+            utils.verbose_print('Please Determine alg_info and input_version parameters or choose anther mode_.',
+                          verbose_level, 0)
+            exit()
+
+        utils.save_data(alg_info, os.path.join(save_path, f'info_ver{input_version}.json'))
+        utils.verbose_print(f'The new {alg_name} version information has been saved.', verbose_level, 0, print_end=' ')
     elif mode_ == 'check':
         if alg_info is None or input_version is None:
             utils.verbose_print('Please Determine alg_info and input_version parameters or choose anther mode_.',
@@ -111,15 +125,18 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
                 work_version, _ = version_verification(alg=alg, alg_info=alg_info, input_version=input_version,
                                                        mode_='create', last_print=False)
         except FileNotFoundError:
-            utils.save_data(alg_info, os.path.join(save_path, f'info_ver{input_version}.json'))
-            utils.verbose_print(f'The new {alg_name} version information has been saved.', verbose_level, 0, print_end=' ')
+            utils.verbose_print(f'The {alg_name} version does not exist!', verbose_level, 0)
+            work_version, _ = version_verification(alg=alg, alg_info=alg_info, input_version=input_version,
+                                                       mode_='create', last_print=False)
     elif mode_ == 'try':
         work_version = -1
     else:
         utils.verbose_print(f'Unknown mode in version_verification function! The mode \'{mode_}\' was given, '
-                      f'acceptable are: \'create\', \'read\', \'check\', \'try\'.', verbose_level, 0)
+                      f'acceptable are: \'create\',\'save\', \'read\', \'check\', \'try\'.', verbose_level, 0)
         work_version = 0
 
+    if no_any_last_print:
+        return work_version, alg_info
     if last_print and input_version != work_version:
         utils.verbose_print(f'The {alg_name} version has been changed to {work_version}', verbose_level, 0)
     else:
@@ -145,12 +162,12 @@ def check_arg_conditions(alg, alg_args, verbose_level=1):
 
 def generate_version_info(alg, **kwargs):
     verbose_level = kwargs.get('verbose', 1)
-    if alg not in constatnts.DEF_KM_PARAM.keys():
+    if alg not in constatnts.MODEL_PARAMS.keys():
         print(f'Unknown clustering algorithm. The algorithm \'{alg}\' was given, '
-              f'acceptable are: {", ".join(list(constatnts.DEF_KM_PARAM.keys()))}.')
+              f'acceptable are: {", ".join(list(constatnts.MODEL_PARAMS.keys()))}.')
         return {}
-    alg_args = {alg_param: kwargs.get(alg_param, constatnts.DEF_KM_PARAM[alg][alg_param])
-                for alg_param in constatnts.DEF_KM_PARAM[alg].keys()}
+    alg_args = {alg_param: kwargs.get(alg_param, constatnts.MODEL_PARAMS[alg][alg_param])
+                for alg_param in constatnts.MODEL_PARAMS[alg].keys()}
     alg_args = check_arg_conditions(alg, alg_args, verbose_level=verbose_level)
     return alg_args
 

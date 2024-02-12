@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset
 
 from clustering_package import embedding
+from clustering_package import constatnts
 from wiki_package.wiki_corpora import WikiCorpus
 
 
@@ -12,7 +13,7 @@ class DKMDataset(Dataset):
 
         self.dataset_name = dataset_name
         self.embedding_type = embedding_type
-        self.embedding_path = embedding_path
+        self.embedding_path = constatnts.EMB_PATH if embedding_type is None else embedding_path
         self.seed = seed
         self.data, self.target, self.n_clusters, self.mask = None, None, None, None
         self.data_source,  self.embedding_size = {}, None
@@ -38,10 +39,12 @@ class DKMDataset(Dataset):
         }[get_type]
 
     def set_embedding_representation(self, emb_kwargs):
+        loaded = False
         if self.embedding_type == 'st_pmL':
             emb_model = embedding.STEmbedding(st_name=self.embedding_type, save_path=self.embedding_path, load_model=False)
             self.data = emb_model.compute(dataset_name=self.dataset_name,
                                           dataset_source=np.array([doc_info['text'] for doc_info in self.data_source]))
+            loaded = True
         elif self.embedding_type in ['emb_stpm', 'emb_st']:
             info = {'language_1': self.data_source['languages'][0],
                     self.data_source['languages'][0] : {'text':[], 'id': []},
@@ -57,10 +60,18 @@ class DKMDataset(Dataset):
                                                   load_model=False)
             self.data = emb_model.compute(dataset_name=self.dataset_name,
                                           dataset_source=info)
+            loaded = True
+        elif self.embedding_type is None:
+            print('The text representation has not been set. Please select an embedding_type or refer directly '
+                  'to the collection texts stored in a parameter data_source[\'dataset\'].')
         elif 'ae' in self.embedding_type:
             emb_model = embedding.AEEmbedding(version=self.embedding_type[3:], save_path=self.embedding_path)
             self.data = emb_model.compute(dataset_name=self.dataset_name, seed=self.seed, **emb_kwargs)
-        self.embedding_size = self.data.shape[1]
+            loaded = True
+
+        if loaded:
+            self.embedding_size = self.data.shape[1]
+            self.embedding_path = emb_model.save_path
 
     def update_data(self, new_data):
         self.data = new_data
@@ -68,7 +79,7 @@ class DKMDataset(Dataset):
 
     def update_embedding_by_seed(self, seed):
         self.seed = seed
-        self.set_embedding_representation()
+        self.set_embedding_representation({})
 
     def get_item_with_target(self, idx):
         return self.data[idx], self.target[idx], self.mask[idx], idx
