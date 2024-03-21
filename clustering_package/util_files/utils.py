@@ -100,7 +100,11 @@ def get_last_param_from_path(directory_path, mark, param_type=int, skip_end_part
     return params
 
 
-def verbose_print(print_line, current_verbose_level, allowed_verbose_level=-1,  additional_condition = True,
+def verbose_print(print_line, current_verbose_level, allowed_verbose_level=-1,  additional_condition=True,
                   print_end='\n',):
     if (current_verbose_level > allowed_verbose_level) and additional_condition:
         print(print_line, end=print_end)
+
+
+if __name__ == '__main__':
+    print('ok')

@@ -27,7 +27,8 @@ def compute_probability(d_closest, m, tau=1.0, mu=2.00):
     return P
 
 
-def compute_closest_dist(v, space, space_mask, dist_fun=distance_util.dist_sum_of_squares, l_nearest_1=1, l_nearest_2=1):
+def compute_closest_dist(v, space, space_mask, dist_fun=distance_util.dist_sum_of_squares,
+                         l_nearest_1=1, l_nearest_2=1):
     dist = dist_fun(v, space)
     dist_1 = dist * torch.squeeze(space_mask)
     dist_1[dist_1 == 0.0] = 1e+32
@@ -52,3 +53,7 @@ def compute_closest_dist_with_mask(v, space, space_mask, v_mask, dist_fun=distan
     d2 = torch.kthvalue(dist_2, l_nearest_2, 1, True)[0].squeeze(1)
 
     return d1, d2
+
+
+if __name__ == '__main__':
+    print('ok')

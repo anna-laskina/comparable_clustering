@@ -59,6 +59,13 @@ class BatchKmeans(KmeansBase):
         # loss_kmeans = dist.gather(1, assignments).squeeze(1).sum()
         return loss_kmeans, dist
 
+    def clusters(self, data):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        dist = self.compute_dist(data, self.cluster_rep)
+        assign = dist.min(1, keepdim=True).indices
+        return assign
+
 
 class AlphaKmeans(KmeansBase):
     def __init__(self, n_clusters=5, random_state=None, dist_metric='euclidean', features_dim=None, strategy='random',
@@ -72,6 +79,14 @@ class AlphaKmeans(KmeansBase):
         softmax = exp / torch.sum(exp, 1).unsqueeze(1)
         loss_alpha_kmeans = torch.mean(torch.sum(softmax * dist, 1))
         return loss_alpha_kmeans, dist
+
+    def clusters(self, data, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        dist = self.compute_dist(data, self.cluster_rep)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        assign = exp / torch.sum(exp, 1).unsqueeze(1)
+        return assign
 
 
 class MaskAlphaKmeans(KmeansBase):
@@ -94,11 +109,11 @@ class MaskAlphaKmeans(KmeansBase):
         self.compute_dim_dist = distance_util.set_dist_function(dist_name=dist_metric + '_dim', lib='torch')
 
     def compute_loss(self, data, alpha):
-        dist, dist_dim = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
+        dist, _ = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
         exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
         softmax = exp / torch.sum(exp, 1).unsqueeze(1)
         loss_alpha_kmeans = torch.mean(torch.sum(softmax * dist, 1))
-        return loss_alpha_kmeans, dist, dist_dim
+        return loss_alpha_kmeans, dist
 
     def update_rep_mask(self, data, alpha=1):
         _, dist_dim = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
@@ -107,6 +122,14 @@ class MaskAlphaKmeans(KmeansBase):
         self.rep_mask = rep_mask
         if not if_continue:
             self.update_mask_fun = self.switch_mask_fun
+
+    def clusters(self, data, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        dist, _ = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        assign = exp / torch.sum(exp, 1).unsqueeze(1)
+        return assign
 
 
 class ComparableAlphaKmeans(KmeansBase):
@@ -136,10 +159,22 @@ class ComparableAlphaKmeans(KmeansBase):
         exp_compar = exp.unsqueeze(2).expand(-1, -1, 3) * rep_prob
         sun_exp_compar = torch.sum(exp_compar, 1)
         sun_exp_compar = sun_exp_compar + torch.ones(sun_exp_compar.size()) * 1e-30
-        exp_compar_norm = (exp_compar / sun_exp_compar).unsqueeze(1).expand(-1, self.n_clusters, -1)
+        exp_compar_norm = exp_compar / sun_exp_compar.unsqueeze(1).expand(-1, self.n_clusters, -1)
         f_x = torch.sum(dist.unsqueeze(2).expand(-1, -1, 3) * exp_compar_norm, 1)
         loss_com_kmeans = torch.mean(torch.sum(data_prob * f_x, 1))
         return loss_com_kmeans, dist
+
+    def clusters(self, data, data_prob, rep_prob, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        dist = self.compute_dist(data, self.cluster_rep)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        exp_compar = exp.unsqueeze(2).expand(-1, -1, 3) * rep_prob
+        sun_exp_compar = torch.sum(exp_compar, 1)
+        sun_exp_compar = sun_exp_compar + torch.ones(sun_exp_compar.size()) * 1e-30
+        exp_compar_norm = exp_compar / sun_exp_compar.unsqueeze(1).expand(-1, self.n_clusters, -1)
+        assign = torch.sum(data_prob.unsqueeze(1).expand(-1, self.n_clusters, -1) * exp_compar_norm, 2)
+        return assign
 
 
 class MaskComparableAlphaKmeans(KmeansBase):
@@ -178,15 +213,15 @@ class MaskComparableAlphaKmeans(KmeansBase):
             mu=self.mu)
 
     def compute_loss(self, data, rep_prob, data_prob, alpha):
-        dist, dist_dim = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
+        dist, _ = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
         exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
         exp_compar = exp.unsqueeze(2).expand(-1, -1, 3) * rep_prob
         sun_exp_compar = torch.sum(exp_compar, 1)
         sun_exp_compar = sun_exp_compar + torch.ones(sun_exp_compar.size()) * 1e-30
-        exp_compar_norm = (exp_compar / sun_exp_compar).unsqueeze(1).expand(-1, self.n_clusters, -1)
+        exp_compar_norm = exp_compar / sun_exp_compar.unsqueeze(1).expand(-1, self.n_clusters, -1)
         f_x = torch.sum(dist.unsqueeze(2).expand(-1, -1, 3) * exp_compar_norm, 1)
         loss_com_kmeans = torch.mean(torch.sum(data_prob * f_x, 1))
-        return loss_com_kmeans, dist, dist_dim
+        return loss_com_kmeans, dist
 
     def update_rep_mask(self, data, alpha=1):
         _, dist_dim = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
@@ -195,6 +230,18 @@ class MaskComparableAlphaKmeans(KmeansBase):
         self.rep_mask = rep_mask
         if not if_continue:
             self.update_mask_fun = self.switch_mask_fun
+
+    def clusters(self, data, data_prob, rep_prob, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        dist, _ = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        exp_compar = exp.unsqueeze(2).expand(-1, -1, 3) * rep_prob
+        sun_exp_compar = torch.sum(exp_compar, 1)
+        sun_exp_compar = sun_exp_compar + torch.ones(sun_exp_compar.size()) * 1e-30
+        exp_compar_norm = exp_compar / sun_exp_compar.unsqueeze(1).expand(-1, self.n_clusters, -1)
+        assign = torch.sum(data_prob.unsqueeze(1).expand(-1, self.n_clusters, -1) * exp_compar_norm, 2)
+        return assign
 
 
 class AutoEncoder(nn.Module):
@@ -255,19 +302,23 @@ class AutoEncoder(nn.Module):
         return loss_ae, h
 
 
-class DeepKmeansBase(KmeansBase):
+class DeepKmeansBase(nn.Module):
     def __init__(self, input_size, random_state=None, n_clusters=5, lambda_=1, dist_metric='sum_of_squares',
                  strategy='random', centroid_info=None,
                  one_encoder=False, hidden_1_size=500, hidden_2_size=500, hidden_3_size=2000, embedding_dim='x10'):
 
+        super().__init__()
+        self.seed = random_state
+        if self.seed is not None:
+            utils.fix_seed(self.seed)
+        self.n_clusters = n_clusters
+        self.compute_dist = distance_util.set_dist_function(dist_name=dist_metric, lib='torch')
+        self.compute_dist_np = distance_util.set_dist_function(dist_name=dist_metric, lib='np')
         self.embedding_size = self.def_embedding_dim(embedding_dim, n_clusters)
-        super().__init__(n_clusters=n_clusters, random_state=random_state, dist_metric=dist_metric,
-                         features_dim=self.embedding_size, strategy=strategy, centroid_info=centroid_info)
-
         self.lambda_ = lambda_
         self.one_encoder = one_encoder
 
-        self.compute_ae_loss_fun = distance_util.set_dist_function('loss' + dist_metric)
+        self.compute_ae_loss_fun = distance_util.set_dist_function('loss_' + dist_metric)
 
         self.encoder_1 = nn.Sequential(nn.Linear(input_size, hidden_1_size), nn.ReLU(),
                                        nn.Linear(hidden_1_size, hidden_2_size), nn.ReLU(),
@@ -281,6 +332,34 @@ class DeepKmeansBase(KmeansBase):
                                      nn.Linear(hidden_3_size, hidden_2_size), nn.ReLU(),
                                      nn.Linear(hidden_2_size, hidden_1_size), nn.ReLU(),
                                      nn.Linear(hidden_1_size, input_size))
+
+        cluster_rep = self.centroids_initialize(strategy=strategy, info=centroid_info)
+        cluster_rep = self.encoder_1(cluster_rep)
+        self.cluster_rep = nn.Parameter(cluster_rep)
+
+    def centroids_initialize(self, strategy='random', info=None):
+        if strategy == 'init':
+            centroids = info
+        elif strategy == 'rand++':
+            centroids = [info[np.random.randint(info.shape[0]), :]]
+            centroid_dist = []
+            for _ in range(self.n_clusters - 1):
+                centroid_dist.append(self.compute_dist_np(info, [centroids[-1]])[:, 0])
+                centroids.append(info[np.argmax(np.min(centroid_dist, 0)), :])
+        elif strategy == 'k-means++':
+            from sklearn.cluster import KMeans
+            _model = KMeans(n_clusters=self.n_clusters, init='k-means++')
+            _model.fit(info)
+            centroids = _model.cluster_centers_
+        elif strategy == 'random':
+            [high, low] = [1, -1] if info is None else [np.max(info), np.min(info)]
+            centroids = (high - low) * torch.rand((self.n_clusters, self.features_dim)) + low
+        else:
+            print('Unknown initialize strategy for centroids. Centroids will be chosen randomly.')
+            centroids = self.centroids_initialize(strategy='random', info=info)
+        if not torch.is_tensor(centroids):
+            centroids = torch.tensor(np.array(centroids), dtype=torch.float32)
+        return centroids
 
     def def_embedding_dim(self, type_emb_size, n_clusters=None):
         if n_clusters is None:
@@ -340,6 +419,16 @@ class DeepAlphaKmeans(DeepKmeansBase):
 
         return loss_ae, loss_kmeans, loss, dist, h
 
+    def clusters(self, data, data_mask, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        y, h = self.forward(data, data_mask)
+
+        dist = self.compute_dist(h, self.cluster_rep)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        assign = exp / torch.sum(exp, 1).unsqueeze(1)
+        return assign
+
 
 class DeepMaskAlphaKmeans(DeepKmeansBase):
     def __init__(self, input_size, eta=0.95, mask_update_type=None,  random_state=None, n_clusters=5, lambda_=1,
@@ -368,7 +457,7 @@ class DeepMaskAlphaKmeans(DeepKmeansBase):
     def compute_loss(self, data, data_mask, alpha):
         y, h = self.forward(data, data_mask)
 
-        dist, dist_dim = self.compute_dim_dist(h, self.cluster_rep, self.rep_mask)
+        dist, _ = self.compute_dim_dist(h, self.cluster_rep, self.rep_mask)
         exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
         softmax = exp / torch.sum(exp, 1).unsqueeze(1)
 
@@ -376,15 +465,27 @@ class DeepMaskAlphaKmeans(DeepKmeansBase):
         loss_ae = self.compute_ae_loss_fun(data, y)
         loss = loss_ae + self.lambda_ * loss_kmeans
 
-        return loss_ae, loss_kmeans, loss, dist, h, dist_dim
+        return loss_ae, loss_kmeans, loss
 
-    def update_rep_mask(self, data, alpha=1):
-        _, dist_dim = self.compute_dim_dist(data, self.cluster_rep, self.rep_mask)
+    def update_rep_mask(self, data, data_mask, alpha=1):
+        _, h = self.forward(data, data_mask)
+        _, dist_dim = self.compute_dim_dist(h, self.cluster_rep, self.rep_mask)
         rep_mask, if_continue = self.update_mask_fun(dist_dim=dist_dim, eta=self.eta, alpha=alpha,
                                                      rep_mask=self.rep_mask)
         self.rep_mask = rep_mask
         if not if_continue:
             self.update_mask_fun = self.switch_mask_fun
+
+    def clusters(self, data, data_mask, alpha):
+        if not torch.is_tensor(data):
+            data = torch.tensor(data, dtype=torch.float32)
+        y, h = self.forward(data, data_mask)
+
+        dist, _ = self.compute_dim_dist(h, self.cluster_rep, self.rep_mask)
+        exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, self.n_clusters)))
+        assign = exp / torch.sum(exp, 1).unsqueeze(1)
+
+        return assign
 
 
 if __name__ == '__main__':

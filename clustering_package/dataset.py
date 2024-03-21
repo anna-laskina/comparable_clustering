@@ -4,12 +4,12 @@ from torch.utils.data import Dataset
 
 from clustering_package import embedding
 from clustering_package import constatnts
-from wiki_package.wiki_corpora import WikiCorpus
+from clustering_package.wikidataset import WikiCorpus
 
 
 class DKMDataset(Dataset):
-    def __init__(self, dataset_name, language_1='en', language_2='fr', dataset_path=None,
-                 embedding_type='', embedding_path=None, get_type='wot', seed=None, emb_kwargs=None):
+    def __init__(self, dataset_name, dataset_path=None, target_type=None,
+                 embedding_type=None, embedding_path=None, get_type='wot', seed=None, emb_kwargs=None):
 
         self.dataset_name = dataset_name
         self.embedding_type = embedding_type
@@ -19,8 +19,11 @@ class DKMDataset(Dataset):
         self.data_source,  self.embedding_size = {}, None
 
         if dataset_name[:4] == 'WIKI':
-            wiki_corpus = WikiCorpus(corpus_id=dataset_name[5:], language_1=language_1, language_2=language_2,
-                                     info_path=dataset_path, load_label_info=False, set_cluster_info=False)
+            target_type = 'secondary_2' if target_type is None else target_type
+            wiki_corpus = WikiCorpus(corpus_id=dataset_name[5:],
+                                     info_path=dataset_path, target_type=target_type.split('_')[0],
+                                     d_min=int(target_type.split('_')[1]))
+            language_1, language_2 = wiki_corpus.language_1, wiki_corpus.language_2
             self.dataset_name = dataset_name[5:]
             self.data_source['dataset'] = wiki_corpus.dataset
             self.data_source['languages'] = [language_1, language_2]
@@ -40,18 +43,21 @@ class DKMDataset(Dataset):
 
     def set_embedding_representation(self, emb_kwargs):
         loaded = False
+        emb_model = None
         if self.embedding_type == 'st_pmL':
-            emb_model = embedding.STEmbedding(st_name=self.embedding_type, save_path=self.embedding_path, load_model=False)
-            self.data = emb_model.compute(dataset_name=self.dataset_name,
-                                          dataset_source=np.array([doc_info['text'] for doc_info in self.data_source]))
+            emb_model = embedding.STEmbedding(st_name=self.embedding_type, save_path=self.embedding_path,
+                                              load_model=False)
+            self.data = emb_model.compute(
+                dataset_name=self.dataset_name,
+                dataset_source=np.array([doc_info['text'] for doc_info in self.data_source['dataset']]))
             loaded = True
         elif self.embedding_type in ['emb_stpm', 'emb_st']:
             info = {'language_1': self.data_source['languages'][0],
-                    self.data_source['languages'][0] : {'text':[], 'id': []},
+                    self.data_source['languages'][0]: {'text': [], 'id': []},
                     'language_2': self.data_source['languages'][1],
-                    self.data_source['languages'][1]: {'text':[], 'id': []},
-                    'id_order': {self.data_source['languages'][0]:{}, self.data_source['languages'][1]: {}}}
-            for i, doc_info in enumerate( self.data_source['dataset']):
+                    self.data_source['languages'][1]: {'text': [], 'id': []},
+                    'id_order': {self.data_source['languages'][0]: {}, self.data_source['languages'][1]: {}}}
+            for i, doc_info in enumerate(self.data_source['dataset']):
                 info[self.data_source['languages'][self.mask[i][0].item()]]['text'].append(doc_info['text'])
                 info[self.data_source['languages'][self.mask[i][0].item()]]['id'].append(doc_info['id'])
                 info['id_order'][self.data_source['languages'][self.mask[i][0].item()]][doc_info['id']] = i
@@ -65,13 +71,13 @@ class DKMDataset(Dataset):
             print('The text representation has not been set. Please select an embedding_type or refer directly '
                   'to the collection texts stored in a parameter data_source[\'dataset\'].')
         elif 'ae' in self.embedding_type:
-            emb_model = embedding.AEEmbedding(version=self.embedding_type[3:], save_path=self.embedding_path)
+            emb_model = embedding.AEEmbedding(version=self.embedding_type[2:], save_path=self.embedding_path)
             self.data = emb_model.compute(dataset_name=self.dataset_name, seed=self.seed, **emb_kwargs)
             loaded = True
 
         if loaded:
             self.embedding_size = self.data.shape[1]
-            self.embedding_path = emb_model.save_path
+            self.embedding_path = emb_model.save_path if emb_model is not None else constatnts.EMB_PATH
 
     def update_data(self, new_data):
         self.data = new_data
@@ -93,3 +99,6 @@ class DKMDataset(Dataset):
     def __getitem__(self, idx):
         return self.get_item(idx)
 
+
+if __name__ == '__main__':
+    print('ok')

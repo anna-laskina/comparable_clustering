@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import torch
 
 from clustering_package import constatnts
@@ -16,7 +17,7 @@ class EarlyStopper:
         self.early_stop = False
 
     def __call__(self, curr_loss):
-        if not  self.off and ((self.last_loss - curr_loss) < self.min_delta):
+        if not self.off and ((self.last_loss - curr_loss) < self.min_delta):
             self.counter += 1
             if self.counter >= self.tolerance:
                 self.early_stop = True
@@ -35,15 +36,6 @@ def set_lr_scheduler(optimizer, scheduler_alg='without', lr_scheduler=1.0,
             exit()
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, n_epochs,
                                                                eta_min=lr_scheduler * learning_rate)
-    elif scheduler_alg == 'OneCycleLR':
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
-                                                        max_lr=lr_scheduler * learning_rate,
-                                                        steps_per_epoch=1,
-                                                        pct_start=0.1,
-                                                        epochs=n_epochs,
-                                                        # div_factor= lr_scheduler,
-                                                        # anneal_strategy='linear'
-                                                        )
     elif scheduler_alg == 'CoaAnne':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
                                                                          T_0=100,
@@ -65,7 +57,7 @@ def set_lr_scheduler(optimizer, scheduler_alg='without', lr_scheduler=1.0,
 
 def version_verification(alg, alg_info=None, input_version=None, mode_='def', last_print=True, verbose_level=0):
     if alg in constatnts.MODEL_PARAMS.keys():
-        save_path = f'{constatnts.SAVE_PATH_VER}/{alg}/ver_info/'
+        save_path = f'{constatnts.SAVE_PATH_VER}/{constatnts.ALG_NAMES[alg]}/ver_info/'
         alg_name = alg
     elif alg in constatnts.DEF_ARG.keys():
         save_path = f'{constatnts.SAVE_PATH_VER}/vers/{alg}/'
@@ -82,7 +74,7 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
             utils.verbose_print('Please Determine alg_info parameter or choose anther mode_.', verbose_level, 0)
             exit()
         existing_versions = utils.get_last_param_from_path(directory_path=os.path.join(save_path, 'info_ver*.json'),
-                                                     mark='ver', param_type=int, verbose=True)
+                                                           mark='ver', param_type=int, verbose=True)
         already_exist = False
         for possible_ver in existing_versions:
             info_ = utils.read_data(os.path.join(save_path, f'info_ver{possible_ver}.json'))
@@ -94,7 +86,8 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
         if not already_exist:
             work_version = max(existing_versions) + 1 if len(existing_versions) > 0 else 1
             utils.save_data(alg_info, os.path.join(save_path, f'info_ver{work_version}.json'))
-            utils.verbose_print(f'The new {alg_name} version information has been saved.', verbose_level, 0, print_end=' ')
+            utils.verbose_print(f'The new {alg_name} version information has been saved.', verbose_level, 0,
+                                print_end=' ')
     elif mode_ == 'read':
         if input_version is None:
             utils.verbose_print('Please determine input_version parameter or choose anther mode_.', verbose_level, 0)
@@ -108,7 +101,7 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
     elif mode_ == 'save':
         if alg_info is None or input_version is None:
             utils.verbose_print('Please Determine alg_info and input_version parameters or choose anther mode_.',
-                          verbose_level, 0)
+                                verbose_level, 0)
             exit()
 
         utils.save_data(alg_info, os.path.join(save_path, f'info_ver{input_version}.json'))
@@ -116,7 +109,7 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
     elif mode_ == 'check':
         if alg_info is None or input_version is None:
             utils.verbose_print('Please Determine alg_info and input_version parameters or choose anther mode_.',
-                          verbose_level, 0)
+                                verbose_level, 0)
             exit()
         try:
             info_ = utils.read_data(os.path.join(save_path, f'info_ver{input_version}.json'))
@@ -127,12 +120,12 @@ def version_verification(alg, alg_info=None, input_version=None, mode_='def', la
         except FileNotFoundError:
             utils.verbose_print(f'The {alg_name} version does not exist!', verbose_level, 0)
             work_version, _ = version_verification(alg=alg, alg_info=alg_info, input_version=input_version,
-                                                       mode_='create', last_print=False)
+                                                   mode_='create', last_print=False)
     elif mode_ == 'try':
         work_version = -1
     else:
         utils.verbose_print(f'Unknown mode in version_verification function! The mode \'{mode_}\' was given, '
-                      f'acceptable are: \'create\',\'save\', \'read\', \'check\', \'try\'.', verbose_level, 0)
+                            f'acceptable are: \'create\',\'save\', \'read\', \'check\', \'try\'.', verbose_level, 0)
         work_version = 0
 
     if no_any_last_print:
@@ -151,11 +144,12 @@ def check_arg_conditions(alg, alg_args, verbose_level=1):
             alg_args['ae_ver'] = None
     if alg == 'assign':
         if alg_args['assignment_type'] == 'hard' and alg_args['alpha'] is not None:
-            utils.verbose_print(f'For assign args with hard assignment type \'alpha\' should be None.', verbose_level, 0)
+            utils.verbose_print(f'For assign args with hard assignment type \'alpha\' should be None.',
+                                verbose_level, 0)
             alg_args['alpha'] = None
         if alg_args['considering_cluster_type'] is False and alg_args['gamma'] is not None:
             utils.verbose_print(f'For assign args without considering_cluster_type \'gamma\' should be None.',
-                          verbose_level, 0)
+                                verbose_level, 0)
             alg_args['gamma'] = None
     return alg_args
 
@@ -182,3 +176,36 @@ def generate_arg(arg_type, **kwargs):
                 for alg_param in constatnts.DEF_ARG[arg_type].keys()}
     alg_args = check_arg_conditions(arg_type, alg_args, verbose_level=verbose_level)
     return alg_args
+
+
+def create_annealing_array(n_size, annealing_start_val=1.0, annealing_max_val=10.0, base=2.0):
+    if n_size > 1 and annealing_max_val != annealing_start_val:
+        annealing_array = np.zeros(n_size, dtype=float)
+        annealing_array[0] = 1
+        for i in range(1, n_size):
+            annealing_array[i] = (base ** (1 / (np.log(i + 1)) ** 2)) * annealing_array[i - 1]
+        annealing_array = (annealing_array - 1) * ((annealing_max_val - annealing_start_val) / (
+                    annealing_array[n_size - 1] - annealing_array[0])) + annealing_start_val
+    else:
+        annealing_array = [annealing_start_val] * n_size
+    return annealing_array
+
+
+def load_pretrain_(use_pre_train, dataset_name, ae_ver, seed):
+    if use_pre_train:
+        state_dict, _, _ = utils.load_model(
+            os.path.join(constatnts.SAVE_ROOT_PATH,
+                         f'models/AE/model/dataset_{dataset_name}/model_{dataset_name}_ae{ae_ver}_s{seed}.pt'))
+
+        pt_h = utils.read_data(
+            os.path.join(constatnts.SAVE_ROOT_PATH,
+                         f'emb/AE/dataset_{dataset_name}/embedding_ae{ae_ver}_s{seed}.npy'), data_type='np')
+        space_info = pt_h
+    else:
+        state_dict = None
+        space_info = None
+    return state_dict, space_info
+
+
+if __name__ == '__main__':
+    print('ok')

@@ -3,6 +3,7 @@ import torch
 
 
 def elimination_update(dist_dim, eta, alpha, rep_mask):
+    dist_dim = dist_dim.permute(1, 0, 2)
     n_clusters = dist_dim.shape[0]
     features_dim = dist_dim.shape[2]
     number_of_dimensions = math.ceil(features_dim * eta)
@@ -91,7 +92,8 @@ def pick_exp_update(dist_dim, eta, alpha, rep_mask=None):
     exp = torch.exp(-alpha * (dist - torch.min(dist, 1)[0].unsqueeze(1).expand(-1, n_clusters)))
     softmax = exp / torch.sum(exp, 1).unsqueeze(1)
     ind0 = torch.arange(0, n_clusters, dtype=torch.int64).unsqueeze(1).expand(-1, number_of_dimensions)
-    ind1 = torch.sort(torch.sum(dist_dim * softmax.T.unsqueeze(2).expand(-1, -1, dist_dim.shape[2]), 1), 1)[1][:, : number_of_dimensions]
+    ind1 = torch.sort(torch.sum(
+        dist_dim * softmax.T.unsqueeze(2).expand(-1, -1, dist_dim.shape[2]), 1), 1)[1][:, : number_of_dimensions]
     rep_mask = torch.zeros(n_clusters, features_dim)
     rep_mask[ind0, ind1] = 1
     return rep_mask, True
